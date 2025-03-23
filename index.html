@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>族譜樹狀圖</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+
+    #tree {
+      width: 100%;
+      border: 1px solid #ccc;
+      overflow-x: auto;
+    }
+
+    .node circle {
+      stroke: #333;
+    }
+
+    .node text {
+      font: 12px sans-serif;
+    }
+
+    .link {
+      fill: none;
+      stroke: #aaa;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>族譜樹狀圖（自動間距）</h1>
+  <div id="tree"></div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbwCpLqoCM6mqnGxPAHDfJROWCDbLOXgXY6t5ZOzUhoCebjYVW8RxL0wNGYQwnfpWqTI8w/exec";
+
+    function buildFamilyTree(data) {
+      const peopleMap = new Map();
+
+      data.forEach(person => {
+        peopleMap.set(person.姓名, {
+          name: person.姓名,
+          gender: person.性別,
+          children: []
+        });
+      });
+
+      const roots = [];
+
+      data.forEach(person => {
+        const node = peopleMap.get(person.姓名);
+        let hasParent = false;
+
+        if (person.父 && peopleMap.has(person.父)) {
+          peopleMap.get(person.父).children.push(node);
+          hasParent = true;
+        }
+
+        if (person.母 && peopleMap.has(person.母)) {
+          peopleMap.get(person.母).children.push(node);
+          hasParent = true;
+        }
+
+        if (!hasParent) {
+          roots.push(node);
+        }
+      });
+
+      return {
+        name: "族譜",
+        children: roots
+      };
+    }
+
+    function drawTree(treeData) {
+      const baseSpacing = 40;
+      const width = 800;
+
+      const root = d3.hierarchy(treeData);
+      const descendantsCount = root.descendants().length;
+      const height = Math.max(descendantsCount * baseSpacing, 300);
+
+      const svg = d3.select("#tree")
+        .html("")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate(40,0)");
+
+      const treeLayout = d3.tree().size([height, width - 160]);
+      treeLayout(root);
+
+      svg.selectAll(".link")
+        .data(root.links())
+        .enter()
+        .append("path")
+        .attr("class", "link")
+        .attr("d", d3.linkHorizontal()
+          .x(d => d.y)
+          .y(d => d.x));
+
+      const node = svg.selectAll(".node")
+        .data(root.descendants())
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", d => `translate(${d.y},${d.x})`);
+
+      node.append("circle")
+        .attr("r", 6)
+        .attr("fill", d => {
+          if (d.data.gender === "男") return "#3b82f6";
+          if (d.data.gender === "女") return "#ec4899";
+          return "#aaa";
+        });
+
+      node.append("text")
+        .attr("dy", 3)
+        .attr("x", d => d.children ? -10 : 10)
+        .style("text-anchor", d => d.children ? "end" : "start")
+        .text(d => d.data.name);
+    }
+
+    fetch(API_URL)
+      .then(res => res.json())
+      .then(data => {
+        const treeData = buildFamilyTree(data);
+        drawTree(treeData);
+      })
+      .catch(error => {
+        console.error("資料載入失敗：", error);
+      });
+  </script>
+</body>
+</html>
